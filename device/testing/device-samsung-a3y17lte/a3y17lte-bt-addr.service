@@ -1,0 +1,7 @@
+[Unit]
+Description=Set a provisional Bluetooth address on the QCA9377
+Before=bluetooth.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/a3y17lte-bt-addr

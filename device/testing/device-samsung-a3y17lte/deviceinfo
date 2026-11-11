@@ -1,0 +1,27 @@
+# Reference: <https://postmarketos.org/deviceinfo>
+# Please use double quotes only. You can source this file in shell
+# scripts.
+
+deviceinfo_format_version="0"
+deviceinfo_name="Samsung Galaxy A3 (2017)"
+deviceinfo_manufacturer="Samsung"
+deviceinfo_codename="samsung-a3y17lte"
+deviceinfo_year="2017"
+deviceinfo_dtb="exynos/exynos7870-a3y17lte"
+deviceinfo_arch="aarch64"
+
+# Device related
+deviceinfo_drm="true"
+deviceinfo_chassis="handset"
+deviceinfo_external_storage="true"
+deviceinfo_screen_width="720"
+deviceinfo_screen_height="1280"
+deviceinfo_usb_network_function="ncm.usb0"
+
+# Bootloader related
+# U-Boot (on BOOT) reads /extlinux/extlinux.conf from the boot file system,
+# which lives on the 200 MiB CACHE partition; the root goes to USERDATA.
+deviceinfo_generate_extlinux_config="true"
+deviceinfo_boot_filesystem="ext2"
+deviceinfo_flash_method="none"
+deviceinfo_initfs_compression="gzip"

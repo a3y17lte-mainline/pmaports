@@ -1,0 +1,55 @@
+# Reference: <https://postmarketos.org/devicepkg>
+maintainer="Martin Štrobl <recordyletsplays@gmail.com>"
+pkgname=device-samsung-a3y17lte
+pkgdesc="Samsung Galaxy A3 (2017)"
+pkgver=1
+pkgrel=2
+url="https://postmarketos.org"
+license="MIT"
+arch="aarch64"
+options="!check !archcheck"
+depends="
+	bluez-btmgmt
+	linux-firmware-ath10k
+	linux-firmware-qca
+	linux-samsung-a3y17lte
+	mesa-dri-gallium
+	postmarketos-base
+"
+makedepends="devicepkg-dev"
+source="
+	deviceinfo
+	kernel-cmdline.conf
+	unudhcpd.conf
+	90-device-samsung-a3y17lte.rules
+	10-a3y17lte-wlan.link
+	a3y17lte-bt-addr.sh
+	a3y17lte-bt-addr.service
+"
+
+build() {
+	devicepkg_build $startdir $pkgname
+}
+
+package() {
+	devicepkg_package $startdir $pkgname
+
+	install -Dm644 "$srcdir"/unudhcpd.conf "$pkgdir"/etc/unudhcpd.conf
+
+	# Provisional Wi-Fi/BT addresses, see the files
+	install -Dm644 "$srcdir"/10-a3y17lte-wlan.link \
+		"$pkgdir"/usr/lib/systemd/network/10-a3y17lte-wlan.link
+	install -Dm755 "$srcdir"/a3y17lte-bt-addr.sh \
+		"$pkgdir"/usr/libexec/a3y17lte-bt-addr
+	install -Dm644 "$srcdir"/a3y17lte-bt-addr.service \
+		"$pkgdir"/usr/lib/systemd/system/a3y17lte-bt-addr.service
+}
+sha512sums="
+d3bdec9a53ffee8bcd53a2a505283067a04ef1dc414e8ee76aa5a0c4bdf2747bd8061e19693445a0cfe422c52e07232619f0d3daccede0e39e7e0c38a88de4d7  deviceinfo
+75e43a76ef96c13142e1ef20d2debdfaa03a5da0867029da1ba9ffcfd1c849e0c79ce70b36c41413ffac2b5ff2b5ed91f52608ac8fb88a06fcfeb5f430daa54c  kernel-cmdline.conf
+2300042ce92c85fa6f25f93ebabdec8ffaa3c34399efcf8ebd7297742242b7d46877d844bc0034623116e784098b5a9610b8309f443e87204ca4bc70e9f675ca  unudhcpd.conf
+976594608f637b3cf11aca73715e903ffba262dc100d065450d991dc04e57d9cb334261a31e51c513e5652d9582d173b2611f5ab5067ef68ac67da6eb8573826  90-device-samsung-a3y17lte.rules
+11f07f4394545e6580c3a79441ed72ef48238e7383fd2289154d7ed2b40a5d47129f0ede1e1a97d357e68382900f7f690e8093b24a5bda7b69fd4d2825f1ec27  10-a3y17lte-wlan.link
+2f16d6b1b21e296744e41956a36d41efa588cbf1e3fd0f180ebc04595da8f1efb418a9ad1ce5270ef59be657bdacd5c802296ca1d8003519f66eddad04a521c7  a3y17lte-bt-addr.sh
+edc4a8f99d9a113d70426b3345d6bb2554c1bb10e6470aa2bd0322ef4bcde2c258855c5175e20a3daedc615de65d8dc309b492ffff66cf1cd03653e399220687  a3y17lte-bt-addr.service
+"

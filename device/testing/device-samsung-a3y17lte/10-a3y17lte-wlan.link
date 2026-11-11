@@ -1,0 +1,9 @@
+# Provisional: a made-up, locally administered address. The real one is in
+# Samsung's EFS partition, which is not read. Without this, wlan0 has
+# Qualcomm's placeholder 00:03:7f:50:00:01.
+[Match]
+Driver=ath10k_sdio
+
+[Link]
+NamePolicy=keep kernel
+MACAddress=02:a3:17:00:00:02

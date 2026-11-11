@@ -1,0 +1,77 @@
+# Kernel config based on linux-postmarketos-exynos7870
+maintainer="Martin Štrobl <recordyletsplays@gmail.com>"
+pkgname=linux-samsung-a3y17lte
+pkgver=7.4_rc2
+pkgrel=1
+pkgdesc="Close-to-mainline kernel for the Samsung Galaxy A3 (2017)"
+arch="aarch64"
+_carch="arm64"
+_flavor="samsung-a3y17lte"
+url="https://github.com/a3y17lte-mainline/linux"
+license="GPL-2.0-only"
+options="!strip !check !tracedeps pmb:cross-native"
+makedepends="
+	bc
+	bison
+	clang
+	elfutils-dev
+	flex
+	linux-headers
+	lld
+	llvm
+	openssl-dev
+	pahole
+	perl
+	postmarketos-installkernel
+	python3
+	zstd
+"
+
+_commit="e04846a59a118603ad56fd13b1fb96ffa9a2af72"
+_config="config-$_flavor.aarch64"
+
+# Source
+source="
+	linux-$_commit.tar.gz::https://github.com/a3y17lte-mainline/linux/archive/$_commit.tar.gz
+	$_config
+"
+builddir="$srcdir/linux-$_commit"
+
+prepare() {
+	default_prepare
+	cp "$srcdir/$_config" .config
+}
+
+build() {
+	unset LDFLAGS
+	# pmbootstrap exports a GCC cross CC; the tools build (resolve_btfids)
+	# would use it. LLVM=1 selects clang for everything.
+	unset CC
+	make ARCH="$_carch" LLVM=1 HOSTLDFLAGS="-fuse-ld=lld" \
+		KBUILD_BUILD_VERSION="$((pkgrel + 1))-postmarketOS"
+}
+
+package() {
+	mkdir -p "$pkgdir"/boot
+	unset CC
+
+	# The bootloader does not support zipped kernels
+	make install dtbs_install modules_install \
+		ARCH="$_carch" \
+		LLVM=1 \
+		INSTALL_PATH="$pkgdir"/boot \
+		INSTALL_MOD_PATH="$pkgdir"/usr \
+		INSTALL_MOD_STRIP=1 \
+		INSTALL_DTBS_PATH="$pkgdir"/boot/dtbs
+	rm -f "$pkgdir"/usr/lib/modules/*/build "$pkgdir"/usr/lib/modules/*/source
+
+	install -D "$builddir"/include/config/kernel.release \
+		"$pkgdir"/usr/share/kernel/"$_flavor"/kernel.release
+
+	install -Dm644 "$builddir"/arch/"$_carch"/boot/Image \
+		"$pkgdir"/boot/vmlinuz
+}
+sha512sums="
+acefe9c5cb166fd3ec0e818ec22ce0f4aec6105a0d5759dbf5800be0fecfab281d2233162117add45850e65a6ae89bcb2e3594abe1c0ebfd712a9e4884a25897  linux-e04846a59a118603ad56fd13b1fb96ffa9a2af72.tar.gz
+8d4438f743d945ecb819f9421af9aa7e66fbd5dca80c24af4896f6893639d2e4871cf40c8aeaf9a9c773fc933875d24f81e5499ef54e409d3188566cbd8b2438  config-samsung-a3y17lte.aarch64
+"
