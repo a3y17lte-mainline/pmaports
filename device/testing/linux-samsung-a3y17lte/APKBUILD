@@ -2,7 +2,7 @@
 maintainer="Martin Štrobl <recordyletsplays@gmail.com>"
 pkgname=linux-samsung-a3y17lte
 pkgver=7.4_rc2
-pkgrel=2
+pkgrel=3
 pkgdesc="Close-to-mainline kernel for the Samsung Galaxy A3 (2017)"
 arch="aarch64"
 _carch="arm64"
@@ -27,7 +27,7 @@ makedepends="
 	zstd
 "
 
-_commit="1f0792e4d5559a4d93e8f831667a4e624024cb4f"
+_commit="7604138f4c4736c5666b81ce15f1ea90c969a2f6"
 _config="config-$_flavor.aarch64"
 
 # Source
@@ -45,9 +45,12 @@ prepare() {
 build() {
 	unset LDFLAGS
 	# pmbootstrap exports a GCC cross CC; the tools build (resolve_btfids)
-	# would use it. LLVM=1 selects clang for everything.
+	# would use it. LLVM=1 selects clang for everything. pmbootstrap's
+	# ccache only wraps the GCC cross compilers, so wrap clang here: the
+	# build directory is the same every time, so unchanged files hit.
 	unset CC
 	make ARCH="$_carch" LLVM=1 HOSTLDFLAGS="-fuse-ld=lld" \
+		CC="ccache clang" HOSTCC="ccache clang" \
 		KBUILD_BUILD_VERSION="$((pkgrel + 1))-postmarketOS"
 }
 
@@ -58,7 +61,7 @@ package() {
 	# The bootloader does not support zipped kernels
 	make install dtbs_install modules_install \
 		ARCH="$_carch" \
-		LLVM=1 \
+		LLVM=1 CC="ccache clang" HOSTCC="ccache clang" \
 		INSTALL_PATH="$pkgdir"/boot \
 		INSTALL_MOD_PATH="$pkgdir"/usr \
 		INSTALL_MOD_STRIP=1 \
