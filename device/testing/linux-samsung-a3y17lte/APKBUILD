@@ -2,7 +2,7 @@
 maintainer="Martin Štrobl <recordyletsplays@gmail.com>"
 pkgname=linux-samsung-a3y17lte
 pkgver=7.4_rc2
-pkgrel=1
+pkgrel=2
 pkgdesc="Close-to-mainline kernel for the Samsung Galaxy A3 (2017)"
 arch="aarch64"
 _carch="arm64"
@@ -27,7 +27,7 @@ makedepends="
 	zstd
 "
 
-_commit="e04846a59a118603ad56fd13b1fb96ffa9a2af72"
+_commit="1f0792e4d5559a4d93e8f831667a4e624024cb4f"
 _config="config-$_flavor.aarch64"
 
 # Source
