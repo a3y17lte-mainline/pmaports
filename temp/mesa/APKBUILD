@@ -7,7 +7,7 @@ maintainer="Martin Štrobl <recordyletsplays@gmail.com>"
 pkgname=mesa
 _pkgver=26.2.6
 pkgver=9999$_pkgver
-pkgrel=1
+pkgrel=2
 pkgdesc="Mesa DRI OpenGL library"
 url="https://www.mesa3d.org"
 arch="aarch64" # fork only needed for the Mali-T830 phone
@@ -85,13 +85,12 @@ source="https://mesa.freedesktop.org/archive/mesa-$_pkgver.tar.xz
 	23575.patch
 	riscv64-tls.patch
 	llvm23.patch
-	midgard-ra-aliasing-spill.patch
-	midgard-keep-expensive-branches.patch
-	midgard-test-knobs.patch
-	midgard-remat-varyings.patch
-	midgard-fewer-registers-retry.patch
-	midgard-remat-remove-dead-load.patch
-	renderonly-close-imported-handles.patch
+	0001-panfrost-drm-shim-Answer-the-L2-features-and-coheren.patch
+	0002-pan-mdg-Spill-from-the-aliased-register-class-when-t.patch
+	0003-pan-mdg-Don-t-flatten-branches-with-expensive-ALU-op.patch
+	0004-pan-mdg-Rematerialize-varyings-instead-of-spilling-t.patch
+	0005-pan-mdg-Retry-fragment-shaders-with-8-work-registers.patch
+	0006-renderonly-Close-imported-scanout-handles-with-GEM_C.patch
 	"
 builddir="$srcdir/mesa-$_pkgver"
 options="!check" # TODO
@@ -456,11 +455,10 @@ bc1824e1e4452a40732fc69874d7e1a66f7803717a314790dcf48867eba34bc9441331ef031e3869
 91bdda3a4b5906963c8c0053ebb924b952dac3d50e66afee87a7abebf82141426b34dce7e1947fe18c54dedd33537792ec13a94504ff7ad890243507d57fdc88  23575.patch
 ce1887fb7d425b94c375a0547bee40c308809c01f5ce1bcddabcc69a7fcb445efb9d5f5c7bac49b2778ab40687c7bce204d278b0bf028d124c75e59083107fba  riscv64-tls.patch
 0ca39282aa42d0b10a5d88a49cc91aea94caa6a9785e7bf75071d101c09ec5debd63a4478053657e163c94007d765d1f05c98a12fe16ad044c3fc10ef1fc27e9  llvm23.patch
-937010df1681fa8d1f8352cde383d8bc52a7940d41b093a557580e06c96cc355d236154905987c3693fdf493eb105fa467c3d052e48c7b5770f20570073e5266  midgard-ra-aliasing-spill.patch
-4ef4496e597848949d72af8103d99cb7542685e6bcd192ae3949cdc4f4201eed7f94429abaf80ce5ed5927477a4d12af229c1d84549f03ba20231ff5ca88a1e7  midgard-keep-expensive-branches.patch
-39144c87fe942eca68aeb8474924b932d72a292e553ce26cd26d78156171a2e3b61c529691ea8b315bfa2813f0607779a4dff9af3531f2afb2909463e09b64fa  midgard-test-knobs.patch
-21fcc273c73f3a61f3f4c3dd3f85d8e585d4d6fc6c600bcf62c6cc08deb49242977dd56bd2e33511c5669a7c661260925e7ab23b20743d305b3315b7efae41da  midgard-remat-varyings.patch
-e919dae2438e56b7f1ae6e54caec95f609b3cfc9c4f9555ec7a96fe791def6408a868635584cd06b2177c3f6b7e7e2e2d41ad1fd69bf7d64cac15b0713ae8cb0  midgard-fewer-registers-retry.patch
-df58bb474bd88a9c7a4ed7f789be8cbf69abaf5963c948b97338538cb66f06da5136d43bab1c5697806f502ea7ebd3c6c0afef63b0c51ab1f7405d7fb0154f01  midgard-remat-remove-dead-load.patch
-d8eda82b70c25bc71ad400d8d628479e0d12a0a918ba0800b8c4e7fb9c3aeba1628f106d7f31f8d420839811fb053aba218fe2a70384f41e0ed90f0437481f98  renderonly-close-imported-handles.patch
+d4272189154b0524aef6407eb4a4eec3adbd2689da200697fd6d8d4b068ec28f4da52d7677525449330033329ab4456e58fd4202ddca18798c32a78351a3ec13  0001-panfrost-drm-shim-Answer-the-L2-features-and-coheren.patch
+084934bbea1c68c478f73d788e80c3848498d8af979f4bdd6bd17f42f63748be384e9ac968fe1198e5a2ef7aa9162c43646156078f2f47d20d17e74391cbc28c  0002-pan-mdg-Spill-from-the-aliased-register-class-when-t.patch
+a0412aa255a999df4345d424089ebd7ef7e1b6a58c745f7a9dfdf8d2346d421e22cb1a1c55c4b564eb774c5a514c1cfd19c7f0854a759279167189e9fa9b20be  0003-pan-mdg-Don-t-flatten-branches-with-expensive-ALU-op.patch
+37451081b2973db6893ace5f9138750756fd00086ade66f6ad3d76c6f90bb1a101707411d1985474665c09f39282619d538f33e3334b68e467855ba08df02543  0004-pan-mdg-Rematerialize-varyings-instead-of-spilling-t.patch
+d95495ddc636d143c8558b63802031251c8f1a7715a4d4575ccc0fbbad1534a8bb4cfd5423387663ac796400673c20756eb119a9509acb007c90e9988ddeae2c  0005-pan-mdg-Retry-fragment-shaders-with-8-work-registers.patch
+14a635682e0f216b90ab7a7a48a2f0cc5dddfb8bda2872fd307ac8d612637a70a7e4fe79479e62bb6e7c977b34df8e8a7432fb3690c52b428c613bf85bae1dd8  0006-renderonly-Close-imported-scanout-handles-with-GEM_C.patch
 "

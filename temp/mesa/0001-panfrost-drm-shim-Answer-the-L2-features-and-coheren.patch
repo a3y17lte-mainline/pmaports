@@ -1,0 +1,30 @@
+From d350a00c44ee61b687a1cdd66aa93a0d9b0eb57f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Martin=20=C5=A0trobl?= <recordyletsplays@gmail.com>
+Date: Wed, 11 Nov 2026 01:01:14 +0100
+Subject: [PATCH 1/6] panfrost/drm-shim: Answer the L2 features and coherency
+ queries
+
+The noop shim fails DRM_PANFROST_PARAM_L2_FEATURES and
+DRM_PANFROST_PARAM_SELECTED_COHERENCY, so the driver cannot create a
+screen on it and shader-db runs abort. Return 0 for both, like the other
+feature parameters.
+---
+ src/panfrost/drm-shim/panfrost_noop.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/panfrost/drm-shim/panfrost_noop.c b/src/panfrost/drm-shim/panfrost_noop.c
+index d393cd257..191b069ab 100644
+--- a/src/panfrost/drm-shim/panfrost_noop.c
++++ b/src/panfrost/drm-shim/panfrost_noop.c
+@@ -79,6 +79,8 @@ panfrost_ioctl_get_param(int fd, unsigned long request, void *arg)
+       gp->value = ~0;
+       return 0;
+    case DRM_PANFROST_PARAM_GPU_REVISION:
++   case DRM_PANFROST_PARAM_L2_FEATURES:
++   case DRM_PANFROST_PARAM_SELECTED_COHERENCY:
+    case DRM_PANFROST_PARAM_THREAD_TLS_ALLOC:
+    case DRM_PANFROST_PARAM_AFBC_FEATURES:
+    case DRM_PANFROST_PARAM_THREAD_FEATURES:
+-- 
+2.56.0
+

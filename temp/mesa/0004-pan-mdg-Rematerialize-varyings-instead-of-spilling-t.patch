@@ -1,6 +1,30 @@
---- a/src/panfrost/compiler/midgard/midgard_ra.c	2026-11-10 21:36:29.923291686 +0100
-+++ b/src/panfrost/compiler/midgard/midgard_ra.c	2026-11-10 21:36:09.524408932 +0100
-@@ -1240,6 +1240,90 @@
+From 083f20a2c0e9b6969504518bb0b480da2d4e6368 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Martin=20=C5=A0trobl?= <recordyletsplays@gmail.com>
+Date: Wed, 11 Nov 2026 01:01:52 +0100
+Subject: [PATCH 4/6] pan/mdg: Rematerialize varyings instead of spilling them
+
+When a fragment shader runs out of work registers, a value loaded by a
+varying load is spilled like any other: stored to thread-local storage
+after the load and filled from it before each use. The load itself has
+no register sources and can simply be repeated instead, which needs no
+store, no scratch memory and no fill.
+
+When the spill candidate is written once by such a load, insert a copy
+of the load before each bundle that uses the value, rewrite the uses to
+the copies and remove the original load.
+
+shader-db (T830, same on T820): fills 693 -> 399, spills 80 -> 62;
+4 shaders change, 3 shrink by up to 11 bundles and one grows from 446 to
+462 bundles. T860: fills 612 -> 330. T720 has no spilling shaders.
+---
+ src/panfrost/compiler/midgard/midgard_ra.c | 123 +++++++++++++++++++++
+ 1 file changed, 123 insertions(+)
+
+diff --git a/src/panfrost/compiler/midgard/midgard_ra.c b/src/panfrost/compiler/midgard/midgard_ra.c
+index 5f53b8d44..b01087759 100644
+--- a/src/panfrost/compiler/midgard/midgard_ra.c
++++ b/src/panfrost/compiler/midgard/midgard_ra.c
+@@ -1234,6 +1234,121 @@ mir_choose_spill_node(compiler_context *ctx, struct lcra_state *l)
  
  /* Once we've chosen a spill node, spill it */
  
@@ -84,14 +108,45 @@
 +      }
 +   }
 +
-+   /* The original load has no uses left. Don't pick it again. */
-+   def->no_spill |= (1 << REG_CLASS_WORK);
++   /* The original load has no uses left: remove it from its bundle (dropping
++    * the bundle if it is now empty) and from the program. */
++   mir_foreach_block(ctx, _block) {
++      midgard_block *block = (midgard_block *)_block;
++      midgard_bundle *bundles = (midgard_bundle *)block->bundles.data;
++      unsigned count = util_dynarray_num_elements(&block->bundles, midgard_bundle);
++
++      for (unsigned i = 0; i < count; ++i) {
++         midgard_bundle *bundle = &bundles[i];
++
++         for (unsigned j = 0; j < bundle->instruction_count; ++j) {
++            if (bundle->instructions[j] != def)
++               continue;
++
++            if (bundle->instruction_count == 1) {
++               block->quadword_count -= midgard_tag_props[bundle->tag].size;
++               memmove(bundle, bundle + 1,
++                       (count - i - 1) * sizeof(midgard_bundle));
++               block->bundles.size -= sizeof(midgard_bundle);
++            } else {
++               memmove(&bundle->instructions[j], &bundle->instructions[j + 1],
++                       (bundle->instruction_count - j - 1) *
++                          sizeof(bundle->instructions[0]));
++               bundle->instruction_count--;
++            }
++
++            mir_remove_instruction(def);
++            return;
++         }
++      }
++   }
++
++   UNREACHABLE("Rematerialized load not scheduled");
 +}
 +
  static void
  mir_spill_register(compiler_context *ctx, unsigned spill_node,
                     unsigned spill_class, unsigned *spill_count)
-@@ -1249,6 +1333,14 @@
+@@ -1243,6 +1358,14 @@ mir_spill_register(compiler_context *ctx, unsigned spill_node,
  
     unsigned spill_index = ctx->temp_count;
  
@@ -106,3 +161,6 @@
     /* We have a spill node, so check the class. Work registers
      * legitimately spill to TLS, but special registers just spill to work
      * registers */
+-- 
+2.56.0
+

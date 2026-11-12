@@ -1,0 +1,56 @@
+From 3f4c3b0de9e60cf67d989c14641efda4d5c82963 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Martin=20=C5=A0trobl?= <recordyletsplays@gmail.com>
+Date: Wed, 11 Nov 2026 01:02:19 +0100
+Subject: [PATCH 6/6] renderonly: Close imported scanout handles with GEM_CLOSE
+
+renderonly_create_gpu_import_for_resource() imports the GPU buffer into
+the KMS device with drmPrimeFDToHandle(), and
+renderonly_scanout_destroy() releases the handle with
+DRM_IOCTL_MODE_DESTROY_DUMB. The kernel allows PRIME_FD_TO_HANDLE on
+render nodes but not DESTROY_DUMB, so when the KMS fd is a render node
+the release fails and the import is never freed. Every buffer imported
+this way stays allocated until the process exits.
+
+On a Mali-T830 + Exynos DECON phone, phoc (wlroots) runs with the render
+node of the display device. After a few hours, 258 buffers (789 MB) of
+clients that had already exited were still held by these imports.
+
+Close the handle with drmCloseBufferHandle() instead. For a dumb buffer
+it does the same as DESTROY_DUMB, and it is allowed on render nodes.
+
+See also https://gitlab.freedesktop.org/mesa/mesa/-/issues/945
+---
+ src/gallium/auxiliary/renderonly/renderonly.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/src/gallium/auxiliary/renderonly/renderonly.c b/src/gallium/auxiliary/renderonly/renderonly.c
+index 6eef8049b..32a8d2b90 100644
+--- a/src/gallium/auxiliary/renderonly/renderonly.c
++++ b/src/gallium/auxiliary/renderonly/renderonly.c
+@@ -41,8 +41,6 @@ void
+ renderonly_scanout_destroy(struct renderonly_scanout *scanout,
+ 			   struct renderonly *ro)
+ {
+-   struct drm_mode_destroy_dumb destroy_dumb = {0};
+-
+    assert(p_atomic_read(&scanout->refcnt) > 0);
+    if (p_atomic_dec_return(&scanout->refcnt))
+       return;
+@@ -53,10 +51,12 @@ renderonly_scanout_destroy(struct renderonly_scanout *scanout,
+     * lock, let's make sure it's still not referenced before freeing it.
+     */
+    if (p_atomic_read(&scanout->refcnt) == 0 && ro->kms_fd != -1) {
+-      destroy_dumb.handle = scanout->handle;
++      /* The handle is either a dumb buffer or a PRIME import. Close it as a
++       * GEM handle: that frees both, and unlike DESTROY_DUMB it is allowed on
++       * render nodes, where an import would otherwise never be released. */
++      drmCloseBufferHandle(ro->kms_fd, scanout->handle);
+       scanout->handle = 0;
+       scanout->stride = 0;
+-      drmIoctl(ro->kms_fd, DRM_IOCTL_MODE_DESTROY_DUMB, &destroy_dumb);
+    }
+ 
+    simple_mtx_unlock(&ro->bo_map_lock);
+-- 
+2.56.0
+

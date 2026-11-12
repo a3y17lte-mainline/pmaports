@@ -1,6 +1,38 @@
---- a/src/panfrost/compiler/midgard/compiler.h	2026-11-10 21:48:14.751672280 +0100
-+++ b/src/panfrost/compiler/midgard/compiler.h	2026-11-10 21:54:49.665523576 +0100
-@@ -259,6 +259,10 @@
+From e093f606746457cc7e2595ddf9a24094d18044c5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Martin=20=C5=A0trobl?= <recordyletsplays@gmail.com>
+Date: Wed, 11 Nov 2026 01:02:09 +0100
+Subject: [PATCH 5/6] pan/mdg: Retry fragment shaders with 8 work registers
+
+Midgard keeps twice as many threads in flight when a shader uses at
+most 8 work registers instead of 16, and four times as many at 4. A
+fragment shader that needs more than 8 registers therefore runs at the
+lowest thread count, even when spilling a few values would let it run
+at twice the threads and hide more of the memory latency.
+
+Compile fragment shaders that end up with more than 8 work registers a
+second time with the allocator limited to 8, and keep the result that is
+expected to be faster: bundles weighted by the measured relative cost
+per bundle at each thread count. The second attempt may fail to
+allocate; then the first result is used. MIDGARD_MESA_DEBUG=noregretry
+disables the retry.
+
+Mali-T830, full-window GTK gradient: 67 ms -> 55 ms per frame.
+shader-db: 349 fragment shaders switch to 8 registers on T830 and T820,
+335 on T860, 68 on T720; no compile failures. Their bundle counts grow
+(T830: +11.5% over all shaders): the extra spill code is accepted where
+the doubled thread count is expected to make up for it.
+---
+ src/panfrost/compiler/midgard/compiler.h      |  6 +-
+ src/panfrost/compiler/midgard/midgard.h       |  1 +
+ .../compiler/midgard/midgard_compile.c        | 89 ++++++++++++++++---
+ src/panfrost/compiler/midgard/midgard_ra.c    | 23 ++++-
+ 4 files changed, 101 insertions(+), 18 deletions(-)
+
+diff --git a/src/panfrost/compiler/midgard/compiler.h b/src/panfrost/compiler/midgard/compiler.h
+index 475787367..974fdd88a 100644
+--- a/src/panfrost/compiler/midgard/compiler.h
++++ b/src/panfrost/compiler/midgard/compiler.h
+@@ -259,6 +259,10 @@ typedef struct compiler_context {
     unsigned spills;
     unsigned fills;
  
@@ -11,7 +43,7 @@
     /* Current NIR function */
     nir_function *func;
  
-@@ -677,7 +681,7 @@
+@@ -677,7 +681,7 @@ mir_has_arg(const midgard_instruction *ins, unsigned arg)
  
  void midgard_schedule_program(compiler_context *ctx);
  
@@ -20,9 +52,23 @@
  void mir_squeeze_index(compiler_context *ctx);
  void mir_lower_special_reads(compiler_context *ctx);
  void mir_liveness_ins_update(uint16_t *live, const midgard_instruction *ins,
---- a/src/panfrost/compiler/midgard/midgard_compile.c	2026-11-10 21:48:14.797605608 +0100
-+++ b/src/panfrost/compiler/midgard/midgard_compile.c	2026-11-10 22:05:58.535670343 +0100
-@@ -42,6 +42,7 @@
+diff --git a/src/panfrost/compiler/midgard/midgard.h b/src/panfrost/compiler/midgard/midgard.h
+index 79ce024a2..077dcfcd6 100644
+--- a/src/panfrost/compiler/midgard/midgard.h
++++ b/src/panfrost/compiler/midgard/midgard.h
+@@ -16,6 +16,7 @@
+ #define MIDGARD_DBG_INORDER  0x0008
+ #define MIDGARD_DBG_VERBOSE  0x0010
+ #define MIDGARD_DBG_INTERNAL 0x0020
++#define MIDGARD_DBG_NO_REG_RETRY 0x0040
+ 
+ extern int midgard_debug;
+ 
+diff --git a/src/panfrost/compiler/midgard/midgard_compile.c b/src/panfrost/compiler/midgard/midgard_compile.c
+index 06eeeebd6..9d3ed5912 100644
+--- a/src/panfrost/compiler/midgard/midgard_compile.c
++++ b/src/panfrost/compiler/midgard/midgard_compile.c
+@@ -42,6 +42,7 @@ static const struct debug_named_value midgard_debug_options[] = {
     {"inorder", MIDGARD_DBG_INORDER, "Disables out-of-order scheduling"},
     {"verbose", MIDGARD_DBG_VERBOSE, "Dump shaders verbosely"},
     {"internal", MIDGARD_DBG_INTERNAL, "Dump internal shaders"},
@@ -30,7 +76,7 @@
     DEBUG_NAMED_VALUE_END};
  
  DEBUG_GET_ONCE_FLAGS_OPTION(midgard_debug, "MIDGARD_MESA_DEBUG",
-@@ -2948,16 +2949,16 @@
+@@ -2947,16 +2948,16 @@ mir_add_writeout_loops(compiler_context *ctx)
     }
  }
  
@@ -54,7 +100,7 @@
  
     ctx->inputs = inputs;
     ctx->nir = nir;
-@@ -3065,7 +3066,11 @@
+@@ -3064,7 +3065,11 @@ midgard_compile_shader_nir(nir_shader *nir,
  
     /* Schedule! */
     midgard_schedule_program(ctx);
@@ -67,7 +113,7 @@
  
     if (midgard_debug & MIDGARD_DBG_SHADERS && !skip_internal)
        mir_print_shader(ctx);
-@@ -3161,11 +3166,69 @@
+@@ -3160,11 +3165,69 @@ midgard_compile_shader_nir(nir_shader *nir,
     info->stats.isa = PAN_STAT_MIDGARD;
     info->stats.midgard = stats;
  
@@ -142,39 +188,20 @@
 +      midgard_stats_fprintf(stderr, prefix, &info->stats.midgard);
 +   }
  }
---- a/src/panfrost/compiler/midgard/midgard.h	2026-11-10 21:48:14.758407224 +0100
-+++ b/src/panfrost/compiler/midgard/midgard.h	2026-11-10 21:54:49.666834250 +0100
-@@ -16,6 +16,7 @@
- #define MIDGARD_DBG_INORDER  0x0008
- #define MIDGARD_DBG_VERBOSE  0x0010
- #define MIDGARD_DBG_INTERNAL 0x0020
-+#define MIDGARD_DBG_NO_REG_RETRY 0x0040
- 
- extern int midgard_debug;
- 
---- a/src/panfrost/compiler/midgard/midgard_ra.c	2026-11-10 21:48:14.799406143 +0100
-+++ b/src/panfrost/compiler/midgard/midgard_ra.c	2026-11-10 21:54:49.670646731 +0100
-@@ -4,7 +4,6 @@
-  * SPDX-License-Identifier: MIT
-  */
- 
--#include "util/u_debug.h"
- #include "util/u_math.h"
- #include "util/u_memory.h"
- #include "compiler.h"
-@@ -763,10 +762,7 @@
+diff --git a/src/panfrost/compiler/midgard/midgard_ra.c b/src/panfrost/compiler/midgard/midgard_ra.c
+index b01087759..d863ce249 100644
+--- a/src/panfrost/compiler/midgard/midgard_ra.c
++++ b/src/panfrost/compiler/midgard/midgard_ra.c
+@@ -762,6 +762,8 @@ max_work_registers(const compiler_context *ctx)
     unsigned rmu_vec4 = ctx->info->fau.count / 4;
     unsigned max_work_registers = (rmu_vec4 >= 8) ? (24 - rmu_vec4) : 16;
  
--   /* TEST KNOB (not for upstream): cap the work registers of fragment shaders */
--   if (ctx->stage == MESA_SHADER_FRAGMENT)
--      max_work_registers = MIN2(max_work_registers,
--                                debug_get_num_option("MDG_WORK_MAX", 16));
 +   max_work_registers = MIN2(max_work_registers, ctx->max_work);
- 
++
     if (needs_contiguous_workgroup(ctx)) {
        unsigned threads = max_threads_per_workgroup(ctx);
-@@ -1596,12 +1592,17 @@
+       assert(threads <= 128 && "maximum threads in ABI exceeded");
+@@ -1621,12 +1623,17 @@ mir_demote_uniforms(compiler_context *ctx, unsigned new_cutoff)
  
  /* Run register allocation in a loop, spilling until we succeed */
  
@@ -194,7 +221,7 @@
  
     /* Number of 128-bit slots in memory we've spilled into */
     unsigned spill_count = DIV_ROUND_UP(ctx->info->tls_size, 16);
-@@ -1618,9 +1619,11 @@
+@@ -1643,9 +1650,11 @@ mir_ra(compiler_context *ctx)
           if (l->spill_class == REG_CLASS_WORK && uniforms > 8) {
              mir_demote_uniforms(ctx, MAX2(uniforms - 4, 8));
           } else if (spill_node == -1) {
@@ -208,7 +235,7 @@
           } else {
              mir_spill_register(ctx, spill_node, l->spill_class, &spill_count);
           }
-@@ -1635,6 +1638,11 @@
+@@ -1660,6 +1669,11 @@ mir_ra(compiler_context *ctx)
        l = allocate_registers(ctx, &spilled);
     } while (spilled && ((iter_count--) > 0));
  
@@ -220,9 +247,12 @@
     if (iter_count <= 0) {
        fprintf(
           stderr,
-@@ -1650,4 +1658,5 @@
+@@ -1675,4 +1689,5 @@ mir_ra(compiler_context *ctx)
     install_registers(ctx, l);
  
     lcra_free(l);
 +   return true;
  }
+-- 
+2.56.0
+

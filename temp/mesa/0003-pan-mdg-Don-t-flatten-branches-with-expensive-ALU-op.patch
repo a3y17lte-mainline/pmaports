@@ -1,0 +1,39 @@
+From 6968a81e1832d8011b76991d1a959f1ac8db6ffb Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Martin=20=C5=A0trobl?= <recordyletsplays@gmail.com>
+Date: Wed, 11 Nov 2026 01:01:14 +0100
+Subject: [PATCH 3/6] pan/mdg: Don't flatten branches with expensive ALU ops
+
+nir_opt_peephole_select runs with expensive_alu_ok, so any if with up to
+64 instructions per side is turned into selects, including code full of
+transcendentals. Midgard runs each thread on its own, so a branch costs
+a few cycles, while the flattened code always executes both sides.
+
+GTK's supersampled linear gradient shader evaluates a 6-segment gradient
+with pow() and log() four times per pixel. Flattened, every pixel
+computes every segment. On a Mali-T830 at 343 MHz a full-window
+gradient runs into the 500 ms job timeout; with the branches kept it
+takes 193 ms per frame, and a half-window one 102 ms instead of 258 ms.
+
+shader-db (T830, same on T820): 294 of 7391 shaders change, mostly grow:
+instructions +1.35%, bundles +2.0%, fills -42% (1188 -> 693). T860:
+294 change, bundles +2.0%, fills -45%. T720: 21 change, bundles +0.4%.
+---
+ src/panfrost/compiler/midgard/midgard_compile.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/panfrost/compiler/midgard/midgard_compile.c b/src/panfrost/compiler/midgard/midgard_compile.c
+index a338a7628..06eeeebd6 100644
+--- a/src/panfrost/compiler/midgard/midgard_compile.c
++++ b/src/panfrost/compiler/midgard/midgard_compile.c
+@@ -468,7 +468,7 @@ optimise_nir(nir_shader *nir, unsigned quirks, bool is_blend)
+ 
+       nir_opt_peephole_select_options peephole_select_options = {
+          .limit = 64,
+-         .expensive_alu_ok = true,
++         .expensive_alu_ok = false,
+       };
+       NIR_PASS(progress, nir, nir_opt_peephole_select, &peephole_select_options);
+       NIR_PASS(progress, nir, nir_opt_algebraic);
+-- 
+2.56.0
+

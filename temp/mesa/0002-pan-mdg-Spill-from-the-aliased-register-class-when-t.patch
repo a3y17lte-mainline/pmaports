@@ -1,3 +1,31 @@
+From d8169ae7db86066025d4fce6b353b3f36b485ec9 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Martin=20=C5=A0trobl?= <recordyletsplays@gmail.com>
+Date: Wed, 11 Nov 2026 01:01:14 +0100
+Subject: [PATCH 2/6] pan/mdg: Spill from the aliased register class when the
+ failing one has nothing left
+
+On GPUs with MIDGARD_INTERPIPE_REG_ALIASING (T720, T820, T830), texture
+sources (REG_CLASS_TEXR) and load/store sources (REG_CLASS_LDST) share
+r26 and r27. When one class runs out of registers, the spill candidate
+is only searched in that class. If both registers are held by long-lived
+values of the other class while every node of the failing class is
+already a short-lived copy, no candidate is found: register allocation
+gives up with "Failed to choose spill node", the shader is emitted
+without registers and the GPU rejects it (INSTR_INVALID_ENC).
+
+When the failing class has no candidate on such GPUs, spill a node of
+the class it shares the registers with. That moves the value to a work
+register and copies it in right before each use.
+
+GTK's supersampled linear gradient shader hits this on T830, as do two
+shader-db shaders (glmark2 and Unity). With the change all three compile
+on T820 and T830, and the two shader-db ones on T720 as well (the GTK
+shader needs GLSL ES 3.10, which T720 does not support). No other
+shader-db shader changes on T720, T820, T830 or T860.
+---
+ src/panfrost/compiler/midgard/midgard_ra.c | 26 +++++++++++++++++++++-
+ 1 file changed, 25 insertions(+), 1 deletion(-)
+
 diff --git a/src/panfrost/compiler/midgard/midgard_ra.c b/src/panfrost/compiler/midgard/midgard_ra.c
 index 80ddc4a41..5f53b8d44 100644
 --- a/src/panfrost/compiler/midgard/midgard_ra.c
@@ -42,3 +70,6 @@ index 80ddc4a41..5f53b8d44 100644
  /* Once we've chosen a spill node, spill it */
  
  static void
+-- 
+2.56.0
+
