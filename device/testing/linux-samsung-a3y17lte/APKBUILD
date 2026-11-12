@@ -27,7 +27,7 @@ makedepends="
 	zstd
 "
 
-_commit="7604138f4c4736c5666b81ce15f1ea90c969a2f6"
+_commit="2ce321ca634209b7a8bd54669316270206523f1d"
 _config="config-$_flavor.aarch64"
 
 # Source
